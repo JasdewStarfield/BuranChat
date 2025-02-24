@@ -2,6 +2,7 @@
 avatars/
 !avatars/atri
 !avatars/mono
+!avatars/buran
 # Database
 *.db
 *.sqlite
