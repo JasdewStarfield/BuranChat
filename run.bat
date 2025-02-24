@@ -1,6 +1,6 @@
 @echo off 
 REM 设置代码页为 GBK
-chcp 936 >nul
+chcp 65001
 title Kourichat 启动器
 
 cls

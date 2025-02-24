@@ -304,7 +304,7 @@ def auto_send_message():
             start_countdown()
         except Exception as e:
             logger.error(f"自动发送消息失败: {str(e)}")
-            start_countdown()
+            retry_countdown()
     else:
         logger.error("没有可用的聊天对象")
         start_countdown()
@@ -320,6 +320,24 @@ def start_countdown():
     countdown_end_time = datetime.now() + timedelta(seconds=countdown_seconds)  # 设置结束时间
     logger.info(f"开始新的倒计时: {countdown_seconds/3600:.2f}小时")
     
+    countdown_timer = threading.Timer(countdown_seconds, auto_send_message)
+    countdown_timer.daemon = True
+    countdown_timer.start()
+    is_countdown_running = True
+
+def retry_countdown():
+    """开始新的倒计时"""
+    retry_interval = 60
+
+    global countdown_timer, is_countdown_running, countdown_end_time  # 添加 countdown_end_time
+
+    if countdown_timer:
+        countdown_timer.cancel()
+
+    countdown_seconds = retry_interval
+    countdown_end_time = datetime.now() + timedelta(seconds=countdown_seconds)  # 设置结束时间
+    logger.info(f"重试，倒计时: {countdown_seconds / 60:.2f}分钟")
+
     countdown_timer = threading.Timer(countdown_seconds, auto_send_message)
     countdown_timer.daemon = True
     countdown_timer.start()
