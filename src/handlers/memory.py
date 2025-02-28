@@ -1,10 +1,16 @@
 import os
 import logging
 from typing import List
-from services.ai.llm_service import LLMService
+from services.ai.llm_service import LLMService, error_messages
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+bot_name = "布兰妮"
+memory_system_prompt = "以下是发生在用户和暴风雪航天飞机拟人AI“布兰妮”（一个有着14岁外表的少女，实际上是搭载在少女仿生体上的苏联AI）的微信聊天记录。请将以下对话记录总结为最重要的几条长期记忆，总结内容应包含地点，事件，人物（如果对话记录中有的话），用中文表述，无需重复人物设定，尽可能简要但包含所有重要细节："
+persona_system_prompt = "以下我将给出一段基于发生在用户和暴风雪航天飞机拟人AI“布兰妮”（一个有着14岁外表的少女，实际上是搭载在少女仿生体上的苏联AI）之间的微信聊天的总结，还将给出一段先前的布兰妮对用户形象的印象。你需要基于这段对话总结，从布兰妮的角度，客观地对先前的用户形象进行更新和修正（若无变化则直接输出原形象即可），包含所了解到的性格、喜好、习惯等等。对话总结如下：'"
+persona_system_prompt_first = "以下我将给出一段基于发生在用户和暴风雪航天飞机拟人AI“布兰妮”（一个有着14岁外表的少女，实际上是搭载在少女仿生体上的苏联AI）之间的微信聊天的总结。你需要根据这段总结，从布兰妮的角度，客观地写出其对用户形象的印象，包含所了解到的性格、喜好、习惯等等。对话总结如下：'"
+persona_system_prompt_suffix = "'。请用中文输出新的用户形象，无需重复人物设定，尽可能简要但包含所有重要细节："
 
 
 class MemoryHandler:
@@ -13,6 +19,7 @@ class MemoryHandler:
         self.memory_dir = os.path.join(root_dir, "data", "memory")
         self.short_memory_path = os.path.join(self.memory_dir, "short_memory.txt")
         self.long_memory_buffer_path = os.path.join(self.memory_dir, "long_memory_buffer.txt")
+        self.persona_path = os.path.join(self.memory_dir, "persona.txt")
         self.api_key = api_key
         self.base_url = base_url
         self.max_token = max_token
@@ -28,6 +35,11 @@ class MemoryHandler:
             with open(self.long_memory_buffer_path, "w", encoding="utf-8"):
                 logger.info("长期记忆缓冲区文件不存在，已创建新文件。")
 
+        # 如果用户形象文件不存在，则创建文件
+        if not os.path.exists(self.persona_path):
+            with open(self.persona_path, "w", encoding="utf-8"):
+                logger.info("用户形象文件不存在，已创建新文件。")
+
     def _get_deepseek_client(self):
 
         return LLMService(
@@ -35,17 +47,17 @@ class MemoryHandler:
             base_url=self.base_url,
             model=self.model,
             max_token=self.max_token,
-            temperature=self.temperature,
+            temperature=1.0,    #温度固定为1.0以增强记忆总结任务的有效性
             max_groups=self.max_groups
         )
     def add_short_memory(self, message: str, reply: str):
         """添加短期记忆"""
         with open(self.short_memory_path, "a", encoding="utf-8") as f:
             f.write(f"用户: {message}\n")
-            f.write(f"bot: {reply}\n\n")
+            f.write(f"{bot_name}: {reply}\n\n")
 
     def summarize_memories(self):
-        """总结短期记忆到长期记忆"""
+        """总结短期记忆到长期记忆和用户形象"""
         if not os.path.exists(self.short_memory_path):
             return
 
@@ -59,28 +71,49 @@ class MemoryHandler:
                 try:
                     deepseek = self._get_deepseek_client()
                     summary = deepseek.get_response(
-                        message="".join(lines[-30:]),
+                        message="".join(lines[:]),
                         user_id="system",
-                        system_prompt="请将以下对话记录总结为最重要的几条长期记忆，总结内容应包含地点，事件，人物（如果对话记录中有的话）用中文简要表述："
+                        system_prompt=memory_system_prompt
                     )
                     logger.debug(f"总结结果:\n{summary}")
 
                     # 检查是否需要重试
-                    retry_sentences = [
-                        "好像有些小状况，请再试一次吧～",
-                        "信号好像不太稳定呢（皱眉）",
-                        "思考被打断了，请再说一次好吗？"
-                    ]
+                    retry_sentences = error_messages
                     if summary in retry_sentences:
                         logger.warning(f"收到需要重试的总结结果: {summary}")
                         retries += 1
 
                         continue
 
-                    # 如果不需要重试，写入长期记忆缓冲区
+                    # 尝试总结用户形象
+                    with open(self.persona_path, "r", encoding="utf-8") as f:
+                        persona = f.read().strip()
+                    if persona:
+                        persona_system_prompt_filled = persona_system_prompt + summary + "'。先前的用户形象如下：'" + persona + persona_system_prompt_suffix
+                    else:
+                        persona_system_prompt_filled = persona_system_prompt_first + summary + persona_system_prompt_suffix
+
+                    new_persona = deepseek.get_response(
+                        message="",
+                        user_id="system",
+                        system_prompt=persona_system_prompt_filled
+                    )
+                    logger.debug(f"用户形象:\n{new_persona}")
+
+                    # 检查是否需要重试
+                    retry_sentences = error_messages
+                    if new_persona in retry_sentences:
+                        logger.warning(f"收到需要重试的用户形象: {new_persona}")
+                        retries += 1
+
+                        continue
+
+                    # 如果不需要重试，写入长期记忆缓冲区和更新用户形象
                     with open(self.long_memory_buffer_path, "a", encoding="utf-8") as f:
                         f.write(f"总结时间: {datetime.now()}\n")
                         f.write(summary + "\n\n")
+                    with open(self.persona_path, "w", encoding="utf-8") as f:
+                        f.write(persona)
 
                     # 清空短期记忆
                     open(self.short_memory_path, "w").close()
@@ -123,11 +156,7 @@ class MemoryHandler:
                 )
 
                 # 检查是否需要重试
-                retry_sentences = [
-                    "好像有些小状况，请再试一次吧～",
-                    "信号好像不太稳定呢（皱眉）",
-                    "思考被打断了，请再说一次好吗？"
-                ]
+                retry_sentences = error_messages
                 if response in retry_sentences:
                     if retry_count < max_retries - 1:
                         logger.warning(f"第 {retry_count + 1} 次重试：收到需要重试的响应: {response}")
@@ -148,3 +177,12 @@ class MemoryHandler:
                 return []
 
         return []
+
+    def get_persona(self) -> str:
+        try:
+            with open(self.persona_path, "r", encoding="utf-8") as f:
+                persona = f.read().strip()
+            return persona
+        except Exception as e:
+            logger.error(f"读取用户形象失败: {str(e)}")
+            return ""

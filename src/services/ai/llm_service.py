@@ -25,6 +25,12 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+error_messages = [
+    "好像有些小状况，请再试一次吧～",
+    "信号好像不太稳定呢（皱眉）",
+    "思考被打断了，请再说一次好吗？"
+]
+
 class LLMService:
     def __init__(self, api_key: str, base_url: str, model: str,
                  max_token: int, temperature: float, max_groups: int):
@@ -319,11 +325,7 @@ class LLMService:
 
         except Exception as e:
             logger.error("深度求索服务调用失败: %s", str(e), exc_info=True)
-            return random.choice([
-                "好像有些小状况，请再试一次吧～",
-                "信号好像不太稳定呢（皱眉）",
-                "思考被打断了，请再说一次好吗？"
-            ])
+            return random.choice(error_messages)
 
     def clear_history(self, user_id: str) -> bool:
         """

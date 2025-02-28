@@ -91,7 +91,13 @@ class MessageHandler:
 
             # 步骤2：获取相关记忆并构造临时提示
             relevant_memories = self.memory_handler.get_relevant_memories(message)
-            memory_prompt = "\n# 动态记忆注入\n" + "\n".join(relevant_memories) if relevant_memories else ""
+            persona = self.memory_handler.get_persona()
+            if relevant_memories:
+                memory_prompt = "\n# 动态记忆注入\n" + "\n".join(relevant_memories)
+                if persona:
+                    memory_prompt = memory_prompt + "\n\n角色对用户的印象：\n" + persona + "\n"
+            else:
+                memory_prompt = ""
             logger.debug(f"注入记忆条数: {len(relevant_memories)}")
 
             # 步骤3：写入临时记忆
