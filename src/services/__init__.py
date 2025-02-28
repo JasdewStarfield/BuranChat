@@ -5,4 +5,4 @@ from .database import (
     engine
 )
 
-__all__ = ['Base', 'Session', 'ChatMessage', 'engine']
+__all__ = ['Base', 'Session', 'ChatMessage', 'engine', 'avatar_manager']

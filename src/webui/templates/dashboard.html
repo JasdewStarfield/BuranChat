@@ -57,7 +57,7 @@
         "aggregateRating": {
             "@type": "AggregateRating",
             "ratingValue": "4.8",
-            "ratingCount": "547",
+            "ratingCount": "865",
             "reviewCount": "81"
         },
         "author": {
@@ -102,7 +102,7 @@
         }
 
         /* 毛玻璃效果卡片 */
-        .glass-panel {
+        .glass-panel, .info-card ,.modal-content,.modal-header,.modal-footer,.modal-body{
             background: var(--card-bg);
             -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
@@ -119,14 +119,6 @@
             box-shadow: 0 8px 12px -1px rgba(0, 0, 0, 0.15), 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
-        .info-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 0.75rem;
-            padding: 1.25rem;
-            margin-bottom: 1rem;
-            transition: all 0.3s ease;
-        }
 
         .info-card:hover {
             transform: translateY(-1px);
@@ -531,7 +523,7 @@
                                     <i class="bi bi-github me-1"></i>GitHub
                                 </a>
                                 <span class="text-muted">
-                                    <i class="bi bi-star-fill me-1 text-warning"></i>547
+                                    <i class="bi bi-star-fill me-1 text-warning"></i>865
                                 </span>
                                 <span class="text-muted">
                                     <i class="bi bi-git me-1"></i>81
@@ -899,7 +891,7 @@
                         <li><i class="bi bi-envelope me-2"></i>yangchenglin2004@foxmail.com</li>
                         <li><i class="bi bi-people me-2"></i>QQ群：715616260</li>
                         <li><i class="bi bi-person me-2"></i>作者：umaru-233</li>
-                        <li><i class="bi bi-star me-2"></i>Stars：547</li>
+                        <li><i class="bi bi-star me-2"></i>Stars：865</li>
                         <li><i class="bi bi-git me-2"></i>Forks：81</li>
                     </ul>
                 </div>
@@ -1296,6 +1288,24 @@
 
         // 页面加载初始化
         document.addEventListener('DOMContentLoaded', function() {
+            // 检查 localStorage 中的状态
+            const darkMode = localStorage.getItem('darkMode');
+            if (darkMode === 'enabled') {
+                document.body.setAttribute('data-bs-theme', 'dark');
+                document.getElementById('darkModeToggle').checked = true; // 更新按钮状态
+            }
+
+            // 护眼模式切换
+            document.getElementById('darkModeToggle').addEventListener('change', function() {
+                if (this.checked) {
+                    document.body.setAttribute('data-bs-theme', 'dark');
+                    localStorage.setItem('darkMode', 'enabled'); // 存储状态
+                } else {
+                    document.body.removeAttribute('data-bs-theme');
+                    localStorage.setItem('darkMode', 'disabled'); // 存储状态
+                }
+            });
+
             // 初始化按钮状态
             const startBtn = document.getElementById('startBotBtn');
             const stopBtn = document.getElementById('stopBotBtn');

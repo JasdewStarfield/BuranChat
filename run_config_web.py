@@ -35,6 +35,8 @@ import hashlib
 import secrets
 from datetime import timedelta
 from src.utils.console import print_status
+from src.avatar_manager import avatar_manager  # 导入角色设定管理器
+from src.webui.routes.avatar import avatar_bp
 
 # 在文件开头添加全局变量声明
 bot_process = None
@@ -96,6 +98,10 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # 生成密钥用于session加密
 app.secret_key = secrets.token_hex(16)
 
+# 在 app 初始化后添加
+app.register_blueprint(avatar_manager)
+app.register_blueprint(avatar_bp)
+
 def get_available_avatars() -> List[str]:
     """获取可用的人设目录列表"""
     avatar_base_dir = os.path.join(ROOT_DIR, "data/avatars")
@@ -133,11 +139,11 @@ def parse_config_groups() -> Dict[str, Dict[str, Any]]:
                 "value": config.user.listen_list,
                 "description": "用户列表(请配置要和bot说话的账号的昵称或者群名，不要写备注！)",
             },
-            "MODEL": {"value": config.llm.model, "description": "AI模型选择"},
             "DEEPSEEK_BASE_URL": {
                 "value": config.llm.base_url,
                 "description": "API注册地址",
             },
+            "MODEL": {"value": config.llm.model, "description": "AI模型选择"},
             "DEEPSEEK_API_KEY": {
                 "value": config.llm.api_key,
                 "description": "API密钥",
@@ -152,7 +158,7 @@ def parse_config_groups() -> Dict[str, Dict[str, Any]]:
                 "type": "number",
                 "description": "温度参数",
                 "min": 0.0,
-                "max": 1.7
+                "max": 1.7,
             },
         }
     )
@@ -172,6 +178,10 @@ def parse_config_groups() -> Dict[str, Dict[str, Any]]:
                 "value": config.media.image_recognition.temperature,
                 "description": "Moonshot温度参数",
             },
+            "MOONSHOT_MODEL": {
+                "value": config.media.image_recognition.model,
+                "description": "Moonshot AI模型",
+            }
         }
     )
 
@@ -289,6 +299,7 @@ def save_config(new_config: Dict[str, Any]) -> bool:
                 api_key=new_config.get("MOONSHOT_API_KEY", ""),
                 base_url=new_config.get("MOONSHOT_BASE_URL", ""),
                 temperature=float(new_config.get("MOONSHOT_TEMPERATURE", 1.1)),
+                model=new_config.get("MOONSHOT_MODEL", ""),
             ),
             image_generation=ImageGenerationSettings(
                 model=new_config.get("IMAGE_MODEL", ""),
@@ -374,20 +385,25 @@ def save_config(new_config: Dict[str, Any]) -> bool:
                             "api_key": {
                                 "value": media_settings.image_recognition.api_key,
                                 "type": "string",
-                                "description": "Moonshot AI API密钥（用于图片和表情包识别）",
+                                "description": "图像识别 AI API 密钥（用于图片和表情包识别）",
                                 "is_secret": True,
                             },
                             "base_url": {
                                 "value": media_settings.image_recognition.base_url,
                                 "type": "string",
-                                "description": "Moonshot API基础URL",
+                                "description": "图像识别 AI API 基础 URL",
                             },
                             "temperature": {
                                 "value": media_settings.image_recognition.temperature,
                                 "type": "number",
-                                "description": "Moonshot AI的温度值",
+                                "description": "图像识别 AI 的温度值",
                                 "min": 0,
                                 "max": 2,
+                            },
+                            "model": {
+                                "value": media_settings.image_recognition.model,
+                                "type": "string",
+                                "description": "图像识别 AI 模型",
                             },
                         },
                         "image_generation": {
@@ -1745,6 +1761,148 @@ def save_quick_setup():
 def quick_setup():
     """快速设置页面"""
     return render_template('quick_setup.html')
+
+@app.route('/load_avatar')
+def load_avatar():
+    try:
+        # 假设默认使用 MONO 角色的设定
+        avatar_path = os.path.join(ROOT_DIR, 'data', 'avatars', 'MONO', 'avatar.md')
+        
+        # 确保目录存在
+        os.makedirs(os.path.dirname(avatar_path), exist_ok=True)
+        
+        # 如果文件不存在，创建一个空文件
+        if not os.path.exists(avatar_path):
+            with open(avatar_path, 'w', encoding='utf-8') as f:
+                f.write("# Task\n请在此输入任务描述\n\n# Role\n请在此输入角色设定\n\n# Appearance\n请在此输入外表描述\n\n")
+        
+        # 读取角色设定文件并解析内容
+        sections = {}
+        current_section = None
+        
+        with open(avatar_path, 'r', encoding='utf-8') as file:
+            content = ""
+            for line in file:
+                if line.startswith('# '):
+                    # 如果已有部分，保存它
+                    if current_section:
+                        sections[current_section.lower()] = content.strip()
+                    # 开始新部分
+                    current_section = line[2:].strip()
+                    content = ""
+                else:
+                    content += line
+            
+            # 保存最后一个部分
+            if current_section:
+                sections[current_section.lower()] = content.strip()
+        
+        return jsonify({
+            'status': 'success',
+            'content': sections
+        })
+    except Exception as e:
+        logger.error(f"加载角色设定失败: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
+
+@app.route('/save_avatar', methods=['POST'])
+def save_avatar():
+    """保存角色设定"""
+    try:
+        avatar_data = request.json  # 获取前端发送的 JSON 数据
+        avatar_name = avatar_data.get('avatar', 'MONO')  # 获取人设名称
+        
+        # 移除avatar字段，避免写入到文件
+        if 'avatar' in avatar_data:
+            del avatar_data['avatar']
+        
+        avatar_path = os.path.join(ROOT_DIR, 'data', 'avatars', avatar_name, 'avatar.md')
+        
+        # 确保目录存在
+        os.makedirs(os.path.dirname(avatar_path), exist_ok=True)
+        
+        with open(avatar_path, 'w', encoding='utf-8') as file:
+            for key, value in avatar_data.items():
+                if value:  # 只写入非空内容
+                    file.write(f"# {key.capitalize()}\n{value}\n\n")  # 写入格式化内容
+        
+        return jsonify({"status": "success", "message": "角色设定已保存"})
+    except Exception as e:
+        logger.error(f"保存角色设定失败: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)})
+
+# 添加获取可用人设列表的路由
+@app.route('/get_available_avatars')
+def get_available_avatars_route():
+    """获取可用的人设列表"""
+    try:
+        avatars = get_available_avatars()
+        return jsonify({
+            'status': 'success',
+            'avatars': avatars
+        })
+    except Exception as e:
+        logger.error(f"获取人设列表失败: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
+
+# 修改加载指定人设内容的路由
+@app.route('/load_avatar_content')
+def load_avatar_content():
+    """加载指定人设的内容"""
+    try:
+        avatar_name = request.args.get('avatar', 'MONO')
+        avatar_path = os.path.join(ROOT_DIR, 'data', 'avatars', avatar_name, 'avatar.md')
+        
+        # 确保目录存在
+        os.makedirs(os.path.dirname(avatar_path), exist_ok=True)
+        
+        # 如果文件不存在，创建一个空文件
+        if not os.path.exists(avatar_path):
+            with open(avatar_path, 'w', encoding='utf-8') as f:
+                f.write("# Task\n请在此输入任务描述\n\n# Role\n请在此输入角色设定\n\n# Appearance\n请在此输入外表描述\n\n")
+        
+        # 读取角色设定文件并解析内容
+        sections = {}
+        current_section = None
+        
+        with open(avatar_path, 'r', encoding='utf-8') as file:
+            content = ""
+            for line in file:
+                if line.startswith('# '):
+                    # 如果已有部分，保存它
+                    if current_section:
+                        sections[current_section.lower()] = content.strip()
+                    # 开始新部分
+                    current_section = line[2:].strip()
+                    content = ""
+                else:
+                    content += line
+            
+            # 保存最后一个部分
+            if current_section:
+                sections[current_section.lower()] = content.strip()
+        
+        # 获取原始文件内容，用于前端显示
+        with open(avatar_path, 'r', encoding='utf-8') as file:
+            raw_content = file.read()
+        
+        return jsonify({
+            'status': 'success',
+            'content': sections,
+            'raw_content': raw_content  # 添加原始内容
+        })
+    except Exception as e:
+        logger.error(f"加载人设内容失败: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
 
 if __name__ == '__main__':
     try:
