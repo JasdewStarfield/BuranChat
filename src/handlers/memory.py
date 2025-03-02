@@ -8,9 +8,9 @@ logger = logging.getLogger(__name__)
 
 bot_name = "布兰妮"
 memory_system_prompt = "以下是发生在用户和暴风雪航天飞机拟人AI“布兰妮”（一个有着14岁外表的少女，实际上是搭载在少女仿生体上的苏联AI）的微信聊天记录。请将以下对话记录总结为最重要的几条长期记忆，总结内容应包含地点，事件，人物（如果对话记录中有的话），用中文表述，无需重复人物设定，尽可能简要但包含所有重要细节："
-persona_system_prompt = "以下我将给出一段基于发生在用户和暴风雪航天飞机拟人AI“布兰妮”（一个有着14岁外表的少女，实际上是搭载在少女仿生体上的苏联AI）之间的微信聊天的总结，还将给出一段先前的布兰妮对用户形象的印象。你需要基于这段对话总结，从布兰妮的角度，客观地对先前的用户形象进行更新和修正（若无变化则直接输出原形象即可），包含所了解到的性格、喜好、习惯等等。对话总结如下：'"
-persona_system_prompt_first = "以下我将给出一段基于发生在用户和暴风雪航天飞机拟人AI“布兰妮”（一个有着14岁外表的少女，实际上是搭载在少女仿生体上的苏联AI）之间的微信聊天的总结。你需要根据这段总结，从布兰妮的角度，客观地写出其对用户形象的印象，包含所了解到的性格、喜好、习惯等等。对话总结如下：'"
-persona_system_prompt_suffix = "'。请用中文输出新的用户形象，无需重复人物设定，尽可能简要但包含所有重要细节。"
+persona_system_prompt = "以下我将给出一段基于发生在用户和暴风雪航天飞机拟人AI“布兰妮”（一个有着14岁外表的少女，实际上是搭载在少女仿生体上的苏联AI）之间的微信聊天的总结，还将给出一段先前的布兰妮对用户形象的印象。你需要基于这段对话总结，从布兰妮的角度，客观地对先前的用户形象进行更新和修正（若无变化则直接输出原形象即可），包含所了解到的性格、喜好、习惯等等。"
+persona_system_prompt_first = "以下我将给出一段基于发生在用户和暴风雪航天飞机拟人AI“布兰妮”（一个有着14岁外表的少女，实际上是搭载在少女仿生体上的苏联AI）之间的微信聊天的总结。你需要根据这段总结，从布兰妮的角度，客观地写出其对用户形象的印象，包含所了解到的性格、喜好、习惯等等。"
+persona_system_prompt_suffix = "请用中文输出新的用户形象，无需重复人物设定，尽可能简要但包含所有重要细节。"
 
 
 class MemoryHandler:
@@ -89,12 +89,12 @@ class MemoryHandler:
                     with open(self.persona_path, "r", encoding="utf-8") as f:
                         persona = f.read().strip()
                     if persona:
-                        persona_system_prompt_filled = persona_system_prompt + summary + "'。先前的用户形象如下：'" + persona + persona_system_prompt_suffix
+                        persona_system_prompt_filled = persona_system_prompt + "\n对话总结如下：'" + summary + "'\n先前的用户形象如下：'" + persona + "'"
                     else:
-                        persona_system_prompt_filled = persona_system_prompt_first + summary + persona_system_prompt_suffix
+                        persona_system_prompt_filled = persona_system_prompt_first + "\n对话总结如下：'" + summary + "'"
 
                     new_persona = deepseek.get_response(
-                        message="",
+                        message=persona_system_prompt_suffix,
                         user_id="system",
                         system_prompt=persona_system_prompt_filled
                     )

@@ -82,6 +82,7 @@ class ChatBot:
                 is_group=is_group
             )
             logger.info(f"消息已添加到处理队列 - 聊天ID: {chat_id}")
+            start_countdown()
             
         except Exception as e:
             logger.error(f"处理消息队列失败: {str(e)}", exc_info=True)

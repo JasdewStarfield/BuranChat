@@ -1464,7 +1464,7 @@ def main():
     print("="*50 + "\n")
     
     # 启动浏览器
-    open_browser(port)
+    # open_browser(port)
     
     app.run(
         host=host, 
