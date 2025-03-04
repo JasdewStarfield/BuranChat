@@ -4,7 +4,7 @@ from typing import List
 from services.ai.llm_service import LLMService, error_messages
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('main')
 
 bot_name = "布兰妮"
 memory_system_prompt = "以下是发生在用户和暴风雪航天飞机拟人AI“布兰妮”（一个有着14岁外表的少女，实际上是搭载在少女仿生体上的苏联AI）的微信聊天记录。请将以下对话记录总结为最重要的几条长期记忆，总结内容应包含地点，事件，人物（如果对话记录中有的话），用中文表述，无需重复人物设定，尽可能简要但包含所有重要细节："

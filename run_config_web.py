@@ -122,141 +122,173 @@ def get_available_avatars() -> List[str]:
 def parse_config_groups() -> Dict[str, Dict[str, Any]]:
     """解析配置文件，将配置项按组分类"""
     from src.config import config
-
-    config_groups = {
-        "基础配置": {},
-        "图像识别API配置": {},
-        "图像生成配置": {},
-        "时间配置": {},
-        "语音配置": {},
-        "Prompt配置": {},
-    }
-
-    # 基础配置
-    config_groups["基础配置"].update(
-        {
-            "LISTEN_LIST": {
-                "value": config.user.listen_list,
-                "description": "用户列表(请配置要和bot说话的账号的昵称或者群名，不要写备注！)",
-            },
-            "DEEPSEEK_BASE_URL": {
-                "value": config.llm.base_url,
-                "description": "API注册地址",
-            },
-            "MODEL": {"value": config.llm.model, "description": "AI模型选择"},
-            "DEEPSEEK_API_KEY": {
-                "value": config.llm.api_key,
-                "description": "API密钥",
-            },
-            "MAX_TOKEN": {
-                "value": config.llm.max_tokens,
-                "description": "回复最大token数",
-                "type": "number",
-            },
-            "TEMPERATURE": {
-                "value": float(config.llm.temperature),  # 确保是浮点数
-                "type": "number",
-                "description": "温度参数",
-                "min": 0.0,
-                "max": 1.7,
-            },
+    
+    try:
+        # 基础配置组
+        config_groups = {
+            "基础配置": {},
+            "图像识别API配置": {},
+            "图像生成配置": {},
+            "时间配置": {},
+            "语音配置": {},
+            "Prompt配置": {},
         }
-    )
 
-    # 图像识别API配置
-    config_groups["图像识别API配置"].update(
-        {
-            "MOONSHOT_API_KEY": {
-                "value": config.media.image_recognition.api_key,
-                "description": "Moonshot API密钥（用于图片和表情包识别）\n API申请https://platform.moonshot.cn/console/api-keys （免费15元额度）",
-            },
-            "MOONSHOT_BASE_URL": {
-                "value": config.media.image_recognition.base_url,
-                "description": "Moonshot API基础URL",
-            },
-            "MOONSHOT_TEMPERATURE": {
-                "value": config.media.image_recognition.temperature,
-                "description": "Moonshot温度参数",
-            },
-            "MOONSHOT_MODEL": {
-                "value": config.media.image_recognition.model,
-                "description": "Moonshot AI模型",
+        # 基础配置
+        config_groups["基础配置"].update(
+            {
+                "LISTEN_LIST": {
+                    "value": config.user.listen_list,
+                    "description": "用户列表(请配置要和bot说话的账号的昵称或者群名，不要写备注！)",
+                },
+                "DEEPSEEK_BASE_URL": {
+                    "value": config.llm.base_url,
+                    "description": "API注册地址",
+                },
+                "MODEL": {"value": config.llm.model, "description": "AI模型选择"},
+                "DEEPSEEK_API_KEY": {
+                    "value": config.llm.api_key,
+                    "description": "API密钥",
+                },
+                "MAX_TOKEN": {
+                    "value": config.llm.max_tokens,
+                    "description": "回复最大token数",
+                    "type": "number",
+                },
+                "TEMPERATURE": {
+                    "value": float(config.llm.temperature),  # 确保是浮点数
+                    "type": "number",
+                    "description": "温度参数",
+                    "min": 0.0,
+                    "max": 1.7,
+                },
             }
-        }
-    )
+        )
 
-    # 图像生成配置
-    config_groups["图像生成配置"].update(
-        {
-            "IMAGE_MODEL": {
-                "value": config.media.image_generation.model,
-                "description": "图像生成模型",
-            },
-            "TEMP_IMAGE_DIR": {
-                "value": config.media.image_generation.temp_dir,
-                "description": "临时图片目录",
-            },
-        }
-    )
-
-    # 时间配置
-    config_groups["时间配置"].update(
-        {
-            "AUTO_MESSAGE": {
-                "value": config.behavior.auto_message.content,
-                "description": "自动消息内容",
-            },
-            "MIN_COUNTDOWN_HOURS": {
-                "value": config.behavior.auto_message.min_hours,
-                "description": "最小倒计时时间（小时）",
-            },
-            "MAX_COUNTDOWN_HOURS": {
-                "value": config.behavior.auto_message.max_hours,
-                "description": "最大倒计时时间（小时）",
-            },
-            "QUIET_TIME_START": {
-                "value": config.behavior.quiet_time.start,
-                "description": "安静时间开始",
-            },
-            "QUIET_TIME_END": {
-                "value": config.behavior.quiet_time.end,
-                "description": "安静时间结束",
-            },
-        }
-    )
-
-    # 语音配置
-    config_groups["语音配置"].update(
-        {
-            "TTS_API_URL": {
-                "value": config.media.text_to_speech.tts_api_url,
-                "description": "语音服务API地址",
-            },
-            "VOICE_DIR": {
-                "value": config.media.text_to_speech.voice_dir,
-                "description": "语音文件目录",
-            },
-        }
-    )
-
-    # Prompt配置
-    available_avatars = get_available_avatars()
-    config_groups["Prompt配置"].update(
-        {
-            "MAX_GROUPS": {
-                "value": config.behavior.context.max_groups,
-                "description": "最大的上下文轮数",
-            },
-            "AVATAR_DIR": {
-                "value": config.behavior.context.avatar_dir,
-                "description": "人设目录（自动包含 avatar.md 和 emojis 目录）",
-                "options": available_avatars,
-                "type": "select"
+        # 图像识别API配置
+        config_groups["图像识别API配置"].update(
+            {
+                "MOONSHOT_API_KEY": {
+                    "value": config.media.image_recognition.api_key,
+                    "description": "Moonshot API密钥（用于图片和表情包识别）\n API申请https://platform.moonshot.cn/console/api-keys （免费15元额度）",
+                },
+                "MOONSHOT_BASE_URL": {
+                    "value": config.media.image_recognition.base_url,
+                    "description": "Moonshot API基础URL",
+                },
+                "MOONSHOT_TEMPERATURE": {
+                    "value": config.media.image_recognition.temperature,
+                    "description": "Moonshot温度参数",
+                },
+                "MOONSHOT_MODEL": {
+                    "value": config.media.image_recognition.model,
+                    "description": "Moonshot AI模型",
+                }
             }
-        }
-    )
+        )
 
-    return config_groups
+        # 图像生成配置
+        config_groups["图像生成配置"].update(
+            {
+                "IMAGE_MODEL": {
+                    "value": config.media.image_generation.model,
+                    "description": "图像生成模型",
+                },
+                "TEMP_IMAGE_DIR": {
+                    "value": config.media.image_generation.temp_dir,
+                    "description": "临时图片目录",
+                },
+            }
+        )
+
+        # 时间配置
+        config_groups["时间配置"].update(
+            {
+                "AUTO_MESSAGE": {
+                    "value": config.behavior.auto_message.content,
+                    "description": "自动消息内容",
+                },
+                "MIN_COUNTDOWN_HOURS": {
+                    "value": config.behavior.auto_message.min_hours,
+                    "description": "最小倒计时时间（小时）",
+                },
+                "MAX_COUNTDOWN_HOURS": {
+                    "value": config.behavior.auto_message.max_hours,
+                    "description": "最大倒计时时间（小时）",
+                },
+                "QUIET_TIME_START": {
+                    "value": config.behavior.quiet_time.start,
+                    "description": "安静时间开始",
+                },
+                "QUIET_TIME_END": {
+                    "value": config.behavior.quiet_time.end,
+                    "description": "安静时间结束",
+                },
+            }
+        )
+
+        # 语音配置
+        config_groups["语音配置"].update(
+            {
+                "TTS_API_URL": {
+                    "value": config.media.text_to_speech.tts_api_url,
+                    "description": "语音服务API地址",
+                },
+                "VOICE_DIR": {
+                    "value": config.media.text_to_speech.voice_dir,
+                    "description": "语音文件目录",
+                },
+            }
+        )
+
+        # Prompt配置
+        available_avatars = get_available_avatars()
+        config_groups["Prompt配置"].update(
+            {
+                "MAX_GROUPS": {
+                    "value": config.behavior.context.max_groups,
+                    "description": "最大的上下文轮数",
+                },
+                "AVATAR_DIR": {
+                    "value": config.behavior.context.avatar_dir,
+                    "description": "人设目录（自动包含 avatar.md 和 emojis 目录）",
+                    "options": available_avatars,
+                    "type": "select"
+                }
+            }
+        )
+
+        # 读取定时任务配置
+        with open(os.path.join(ROOT_DIR, 'src/config/config.json'), 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+            
+        # 获取定时任务配置
+        if 'categories' in config_data and 'schedule_settings' in config_data['categories']:
+            # 将定时任务配置添加到 config_groups 中，但不是作为 categories 的子项
+            config_groups['定时任务配置'] = {
+                'tasks': {
+                    'value': config_data['categories']['schedule_settings']['settings']['tasks']['value'],
+                    'type': 'array',
+                    'description': '定时任务列表'
+                }
+            }
+        else:
+            config_groups['定时任务配置'] = {
+                'tasks': {
+                    'value': [],
+                    'type': 'array',
+                    'description': '定时任务列表'
+                }
+            }
+
+        # 打印调试信息
+        logger.debug(f"解析后的定时任务配置: {config_groups.get('定时任务配置', {}).get('tasks', {}).get('value', [])}")
+        
+        return config_groups
+        
+    except Exception as e:
+        logger.error(f"解析配置组失败: {str(e)}")
+        return {}
 
 
 def save_config(new_config: Dict[str, Any]) -> bool:
@@ -509,27 +541,51 @@ def index():
     return redirect(url_for('dashboard'))
 
 @app.route('/save', methods=['POST'])
-def save():
+def save_config():
     """保存配置"""
     try:
-        new_config = request.json
-        logger.debug(f"接收到的配置数据: {new_config}")
+        data = request.get_json()
+        logger.debug(f"接收到的配置数据: {data}")
         
-        if save_config(new_config):
-            return jsonify({
-                "status": "success", 
-                "message": "✨ 配置已成功保存并生效",
-                "title": "保存成功"  # 添加标题字段
-            })
+        # 读取当前配置
+        config_path = os.path.join(ROOT_DIR, 'src/config/config.json')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            current_config = json.load(f)
+        
+        # 更新配置
+        for key, value in data.items():
+            if key in current_config:
+                current_config[key] = value
+            
+            # 特殊处理定时任务配置
+            if key == 'TASKS':
+                try:
+                    tasks = json.loads(value) if isinstance(value, str) else value
+                    current_config['categories']['schedule_settings']['settings']['tasks']['value'] = tasks
+                except Exception as e:
+                    logger.error(f"处理定时任务配置失败: {str(e)}")
+        
+        # 保存配置
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(current_config, f, ensure_ascii=False, indent=4)
+        
+        # 重新初始化定时任务
+        try:
+            from src.main import initialize_auto_tasks
+            initialize_auto_tasks()
+        except Exception as e:
+            logger.error(f"重新初始化定时任务失败: {str(e)}")
+        
         return jsonify({
-            "status": "error", 
-            "message": "保存失败，请重试",
-            "title": "保存失败"
+            "status": "success",
+            "message": "✨ 配置已成功保存并生效",
+            "title": "保存成功"
         })
+        
     except Exception as e:
-        logger.error(f"保存失败: {str(e)}")
+        logger.error(f"保存配置失败: {str(e)}")
         return jsonify({
-            "status": "error", 
+            "status": "error",
             "message": f"保存失败: {str(e)}",
             "title": "错误"
         })
@@ -544,18 +600,21 @@ def upload_background():
     if file.filename == '':
         return jsonify({"status": "error", "message": "没有选择文件"})
     
-    if file:
-        filename = secure_filename(file.filename)
-        # 清理旧的背景图片
-        for old_file in os.listdir(app.config['UPLOAD_FOLDER']):
-            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], old_file))
-        # 保存新图片
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        return jsonify({
-            "status": "success", 
-            "message": "背景图片已更新",
-            "path": f"/background_image/{filename}"
-        })
+    # 确保 filename 不为 None
+    if file.filename is None:
+        return jsonify({"status": "error", "message": "文件名无效"})
+        
+    filename = secure_filename(file.filename)
+    # 清理旧的背景图片
+    for old_file in os.listdir(app.config['UPLOAD_FOLDER']):
+        os.remove(os.path.join(app.config['UPLOAD_FOLDER'], old_file))
+    # 保存新图片
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    return jsonify({
+        "status": "success", 
+        "message": "背景图片已更新",
+        "path": f"/background_image/{filename}"
+    })
 
 # 添加背景图片目录的路由
 @app.route('/background_image/<filename>')
@@ -591,10 +650,18 @@ def dashboard():
     """仪表盘页面"""
     if not session.get('logged_in'):
         return redirect(url_for('login'))
+    
+    # 读取配置
+    config_groups = {}
+    with open(os.path.join(ROOT_DIR, 'src/config/config.json'), 'r', encoding='utf-8') as f:
+        config_data = json.load(f)
+        config_groups = config_data.get('categories', {})
+    
     return render_template(
-        'dashboard.html', 
+        'dashboard.html',
         is_local=is_local_network(),
-        active_page='dashboard'
+        active_page='dashboard',
+        config_groups=config_groups  # 传递完整的配置组
     )
 
 @app.route('/system_info')
@@ -682,7 +749,7 @@ def check_update():
 def confirm_update():
     """确认是否更新"""
     try:
-        choice = request.json.get('choice', '').lower()
+        choice = (request.json or {}).get('choice', '').lower()
         if choice in ('y', 'yes'):
             updater = Updater()
             result = updater.update()
@@ -726,8 +793,10 @@ def start_bot():
             CREATE_NEW_PROCESS_GROUP = 0x00000200
             DETACHED_PROCESS = 0x00000008
             creationflags = CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS
+            preexec_fn = None
         else:
             creationflags = 0
+            preexec_fn = getattr(os, 'setsid', None)
         
         # 启动进程
         bot_process = subprocess.Popen(
@@ -740,7 +809,7 @@ def start_bot():
             encoding='utf-8',
             errors='replace',
             creationflags=creationflags if sys.platform.startswith('win') else 0,
-            preexec_fn=os.setsid if not sys.platform.startswith('win') else None
+            preexec_fn=preexec_fn
         )
         
         # 记录启动时间
@@ -750,18 +819,19 @@ def start_bot():
         def read_output():
             try:
                 while bot_process and bot_process.poll() is None:
-                    line = bot_process.stdout.readline()
-                    if line:
-                        try:
-                            # 尝试解码并清理日志内容
-                            line = line.strip()
-                            if isinstance(line, bytes):
-                                line = line.decode('utf-8', errors='replace')
-                            timestamp = datetime.datetime.now().strftime('%H:%M:%S')
-                            bot_logs.put(f"[{timestamp}] {line}")
-                        except Exception as e:
-                            logger.error(f"日志处理错误: {str(e)}")
-                            continue
+                    if bot_process.stdout:
+                        line = bot_process.stdout.readline()
+                        if line:
+                            try:
+                                # 尝试解码并清理日志内容
+                                line = line.strip()
+                                if isinstance(line, bytes):
+                                    line = line.decode('utf-8', errors='replace')
+                                timestamp = datetime.datetime.now().strftime('%H:%M:%S')
+                                bot_logs.put(f"[{timestamp}] {line}")
+                            except Exception as e:
+                                logger.error(f"日志处理错误: {str(e)}")
+                                continue
             except Exception as e:
                 logger.error(f"读取日志失败: {str(e)}")
                 bot_logs.put(f"[ERROR] 读取日志失败: {str(e)}")
@@ -832,8 +902,14 @@ def stop_bot():
                 subprocess.run(['taskkill', '/F', '/T', '/PID', str(bot_process.pid)], 
                              capture_output=True)
             else:
-                import signal
-                os.killpg(os.getpgid(bot_process.pid), signal.SIGTERM)
+                # 使用 getattr 避免在 Windows 上直接引用不存在的属性
+                killpg = getattr(os, 'killpg', None)
+                getpgid = getattr(os, 'getpgid', None)
+                if killpg and getpgid:
+                    import signal
+                    killpg(getpgid(bot_process.pid), signal.SIGTERM)
+                else:
+                    bot_process.kill()
             
             # 清理进程对象
             bot_process = None
@@ -865,12 +941,24 @@ def config():
     """配置页面"""
     if not session.get('logged_in'):
         return redirect(url_for('login'))
+        
     config_groups = parse_config_groups()  # 获取配置组
+    
+    # 获取定时任务列表
+    tasks = config_groups.get('定时任务配置', {}).get('tasks', {}).get('value', [])
+    
+    # 打印详细的调试信息
+    logger.debug(f"配置组: {config_groups}")
+    logger.debug(f"定时任务配置: {config_groups.get('定时任务配置', {})}")
+    logger.debug(f"tasks 配置: {config_groups.get('定时任务配置', {}).get('tasks', {})}")
+    logger.debug(f"获取到的任务列表: {tasks}")
+    
     return render_template(
-        'config.html', 
+        'config.html',
         config_groups=config_groups,  # 传递配置组
-        is_local=is_local_network(),  # 传递本地网络状态
-        active_page='config'  # 传递当前页面标识
+        tasks_json=json.dumps(tasks, ensure_ascii=False),  # 额外传递任务列表JSON
+        is_local=is_local_network(),
+        active_page='config'
     )
 
 # 添加获取用户信息的路由
@@ -929,13 +1017,16 @@ def get_user_info():
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     """提供静态文件服务"""
-    return send_from_directory(app.static_folder, filename)
+    static_folder = app.static_folder
+    if static_folder is None:
+        static_folder = os.path.join(ROOT_DIR, 'src/webui/static')
+    return send_from_directory(static_folder, filename)
 
 @app.route('/execute_command', methods=['POST'])
 def execute_command():
     """执行控制台命令"""
     try:
-        command = request.json.get('command', '').strip()
+        command = (request.json or {}).get('command', '').strip()
         global bot_process, bot_start_time
         
         # 处理内置命令
@@ -1028,8 +1119,10 @@ type - 显示文件内容
                 CREATE_NEW_PROCESS_GROUP = 0x00000200
                 DETACHED_PROCESS = 0x00000008
                 creationflags = CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS
+                preexec_fn = None
             else:
                 creationflags = 0
+                preexec_fn = getattr(os, 'setsid', None)
             
             # 启动进程
             bot_process = subprocess.Popen(
@@ -1042,7 +1135,7 @@ type - 显示文件内容
                 encoding='utf-8',
                 errors='replace',
                 creationflags=creationflags if sys.platform.startswith('win') else 0,
-                preexec_fn=os.setsid if not sys.platform.startswith('win') else None
+                preexec_fn=preexec_fn
             )
             
             # 记录启动时间
@@ -1072,8 +1165,14 @@ type - 显示文件内容
                         subprocess.run(['taskkill', '/F', '/T', '/PID', str(bot_process.pid)], 
                                      capture_output=True)
                     else:
-                        import signal
-                        os.killpg(os.getpgid(bot_process.pid), signal.SIGTERM)
+                        # 使用 getattr 避免在 Windows 上直接引用不存在的属性
+                        killpg = getattr(os, 'killpg', None)
+                        getpgid = getattr(os, 'getpgid', None)
+                        if killpg and getpgid:
+                            import signal
+                            killpg(getpgid(bot_process.pid), signal.SIGTERM)
+                        else:
+                            bot_process.kill()
                     
                     # 清理进程对象
                     bot_process = None
@@ -1109,8 +1208,12 @@ type - 显示文件内容
                         subprocess.run(['taskkill', '/F', '/T', '/PID', str(bot_process.pid)], 
                                      capture_output=True)
                     else:
-                        import signal
-                        os.killpg(os.getpgid(bot_process.pid), signal.SIGTERM)
+                        # 使用 getattr 避免在 Windows 上直接引用不存在的属性
+                        killpg = getattr(os, 'killpg', None)
+                        getpgid = getattr(os, 'getpgid', None)
+                        if killpg and getpgid:
+                            import signal
+                            killpg(getpgid(bot_process.pid), signal.SIGTERM)
                 except Exception as e:
                     return jsonify({
                         'status': 'error',
@@ -1132,8 +1235,10 @@ type - 显示文件内容
                     CREATE_NEW_PROCESS_GROUP = 0x00000200
                     DETACHED_PROCESS = 0x00000008
                     creationflags = CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS
+                    preexec_fn = None
                 else:
                     creationflags = 0
+                    preexec_fn = getattr(os, 'setsid', None)
                 
                 bot_process = subprocess.Popen(
                     [sys.executable, 'run.py'],
@@ -1145,7 +1250,7 @@ type - 显示文件内容
                     encoding='utf-8',
                     errors='replace',
                     creationflags=creationflags if sys.platform.startswith('win') else 0,
-                    preexec_fn=os.setsid if not sys.platform.startswith('win') else None
+                    preexec_fn=preexec_fn
                 )
                 
                 bot_start_time = datetime.datetime.now()
@@ -1426,11 +1531,15 @@ def main():
     print_status("配置文件检查完成", "success", "CHECK")
 
     # 修改启动 Web 服务器的部分
-    cli = sys.modules['flask.cli']
-    cli.show_server_banner = lambda *x: None  # 禁用 Flask 启动横幅
+    try:
+        cli = sys.modules['flask.cli']
+        if hasattr(cli, 'show_server_banner'):
+            setattr(cli, 'show_server_banner', lambda *x: None)  # 禁用 Flask 启动横幅
+    except (KeyError, AttributeError):
+        pass
     
     host = '0.0.0.0'
-    port = 8501
+    port = 8502
     
     print_status("正在启动Web服务...", "info", "INTERNET")
     print("-"*50)
@@ -1448,7 +1557,7 @@ def main():
             for addr in addresses:
                 ip = addr[4][0]
                 # 只获取IPv4地址且不是回环地址
-                if '.' in ip and ip != '127.0.0.1':
+                if isinstance(ip, str) and '.' in ip and ip != '127.0.0.1':
                     ip_list.append(ip)
         except:
             pass
@@ -1523,6 +1632,8 @@ def hash_password(password: str) -> str:
 def is_local_network() -> bool:
     # 检查是否是本地网络访问
     client_ip = request.remote_addr
+    if client_ip is None:
+        return True
     return (
         client_ip == '127.0.0.1' or 
         client_ip.startswith('192.168.') or 
@@ -1718,7 +1829,7 @@ def get_model_configs():
 def save_quick_setup():
     """保存快速设置"""
     try:
-        new_config = request.json
+        new_config = request.json or {}
         from src.config import config
         
         # 获取当前配置
@@ -1761,78 +1872,6 @@ def save_quick_setup():
 def quick_setup():
     """快速设置页面"""
     return render_template('quick_setup.html')
-
-@app.route('/load_avatar')
-def load_avatar():
-    try:
-        # 假设默认使用 MONO 角色的设定
-        avatar_path = os.path.join(ROOT_DIR, 'data', 'avatars', 'MONO', 'avatar.md')
-        
-        # 确保目录存在
-        os.makedirs(os.path.dirname(avatar_path), exist_ok=True)
-        
-        # 如果文件不存在，创建一个空文件
-        if not os.path.exists(avatar_path):
-            with open(avatar_path, 'w', encoding='utf-8') as f:
-                f.write("# Task\n请在此输入任务描述\n\n# Role\n请在此输入角色设定\n\n# Appearance\n请在此输入外表描述\n\n")
-        
-        # 读取角色设定文件并解析内容
-        sections = {}
-        current_section = None
-        
-        with open(avatar_path, 'r', encoding='utf-8') as file:
-            content = ""
-            for line in file:
-                if line.startswith('# '):
-                    # 如果已有部分，保存它
-                    if current_section:
-                        sections[current_section.lower()] = content.strip()
-                    # 开始新部分
-                    current_section = line[2:].strip()
-                    content = ""
-                else:
-                    content += line
-            
-            # 保存最后一个部分
-            if current_section:
-                sections[current_section.lower()] = content.strip()
-        
-        return jsonify({
-            'status': 'success',
-            'content': sections
-        })
-    except Exception as e:
-        logger.error(f"加载角色设定失败: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        })
-
-@app.route('/save_avatar', methods=['POST'])
-def save_avatar():
-    """保存角色设定"""
-    try:
-        avatar_data = request.json  # 获取前端发送的 JSON 数据
-        avatar_name = avatar_data.get('avatar', 'MONO')  # 获取人设名称
-        
-        # 移除avatar字段，避免写入到文件
-        if 'avatar' in avatar_data:
-            del avatar_data['avatar']
-        
-        avatar_path = os.path.join(ROOT_DIR, 'data', 'avatars', avatar_name, 'avatar.md')
-        
-        # 确保目录存在
-        os.makedirs(os.path.dirname(avatar_path), exist_ok=True)
-        
-        with open(avatar_path, 'w', encoding='utf-8') as file:
-            for key, value in avatar_data.items():
-                if value:  # 只写入非空内容
-                    file.write(f"# {key.capitalize()}\n{value}\n\n")  # 写入格式化内容
-        
-        return jsonify({"status": "success", "message": "角色设定已保存"})
-    except Exception as e:
-        logger.error(f"保存角色设定失败: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)})
 
 # 添加获取可用人设列表的路由
 @app.route('/get_available_avatars')
