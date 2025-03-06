@@ -20,6 +20,7 @@ class MemoryHandler:
         self.short_memory_path = os.path.join(self.memory_dir, "short_memory.txt")
         self.long_memory_buffer_path = os.path.join(self.memory_dir, "long_memory_buffer.txt")
         self.persona_path = os.path.join(self.memory_dir, "persona.txt")
+        self.last_prompt_path = os.path.join(self.memory_dir, "last_prompt.txt")
         self.api_key = api_key
         self.base_url = base_url
         self.max_token = max_token
@@ -40,6 +41,11 @@ class MemoryHandler:
             with open(self.persona_path, "w", encoding="utf-8"):
                 logger.info("用户形象文件不存在，已创建新文件。")
 
+        # 如果last_prompt文件不存在，则创建文件
+        if not os.path.exists(self.last_prompt_path):
+            with open(self.last_prompt_path, "w", encoding="utf-8"):
+                logger.info("last_prompt文件不存在，已创建新文件。")
+
     def _get_deepseek_client(self):
 
         return LLMService(
@@ -47,7 +53,7 @@ class MemoryHandler:
             base_url=self.base_url,
             model=self.model,
             max_token=self.max_token,
-            temperature=1.0,    #温度固定为1.0以增强记忆总结任务的有效性
+            temperature=0.8,    #温度固定为0.8以增强记忆总结任务的有效性
             max_groups=self.max_groups
         )
     def add_short_memory(self, message: str, reply: str):
@@ -55,6 +61,10 @@ class MemoryHandler:
         with open(self.short_memory_path, "a", encoding="utf-8") as f:
             f.write(f"用户: {message}\n")
             f.write(f"{bot_name}: {reply}\n\n")
+
+    def write_last_prompt(self, prompt):
+        with open(self.last_prompt_path, "w", encoding="utf-8") as f:
+            f.write(prompt)
 
     def summarize_memories(self):
         """总结短期记忆到长期记忆和用户形象"""
@@ -113,7 +123,7 @@ class MemoryHandler:
                         f.write(f"总结时间: {datetime.now()}\n")
                         f.write(summary + "\n\n")
                     with open(self.persona_path, "w", encoding="utf-8") as f:
-                        f.write(persona)
+                        f.write(new_persona)
 
                     # 清空短期记忆
                     open(self.short_memory_path, "w").close()
