@@ -310,7 +310,7 @@ class LLMService:
                     "frequency_penalty": 0.2  # 频率惩罚参数
                 }
 
-                logger.info(f"完整Prompt: {message}")
+                logger.info(f"完整Prompt: {messages}")
                 
                 # 使用 OpenAI 客户端发送请求
                 response = self.client.chat.completions.create(**request_config)
