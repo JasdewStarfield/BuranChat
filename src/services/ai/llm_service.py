@@ -22,7 +22,7 @@ from tenacity import (
     retry_if_exception_type
 )
 import requests
-from handlers.memory import write_last_prompt
+# from handlers.memory import write_last_prompt
 
 # 修改logger获取方式，确保与main模块一致
 logger = logging.getLogger('main')
@@ -310,7 +310,7 @@ class LLMService:
                     "frequency_penalty": 0.2  # 频率惩罚参数
                 }
 
-                write_last_prompt(messages)
+                # write_last_prompt(messages)
                 
                 # 使用 OpenAI 客户端发送请求
                 response = self.client.chat.completions.create(**request_config)
