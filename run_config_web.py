@@ -11,7 +11,7 @@ import os
 import sys
 import re
 import logging
-from flask import Flask, render_template, jsonify, request, send_from_directory, redirect, url_for, session
+from flask import Flask, render_template, jsonify, request, send_from_directory, redirect, url_for, session, g
 import importlib
 import json
 from colorama import init, Fore, Style
@@ -42,6 +42,7 @@ from src.webui.routes.avatar import avatar_bp
 bot_process = None
 bot_start_time = None
 bot_logs = Queue(maxsize=1000)
+
 
 # 配置日志
 dictConfig({
@@ -258,31 +259,28 @@ def parse_config_groups() -> Dict[str, Dict[str, Any]]:
             }
         )
 
-        # 读取定时任务配置
-        with open(os.path.join(ROOT_DIR, 'src/config/config.json'), 'r', encoding='utf-8') as f:
-            config_data = json.load(f)
-            
-        # 获取定时任务配置
-        if 'categories' in config_data and 'schedule_settings' in config_data['categories']:
-            # 将定时任务配置添加到 config_groups 中，但不是作为 categories 的子项
-            config_groups['定时任务配置'] = {
-                'tasks': {
-                    'value': config_data['categories']['schedule_settings']['settings']['tasks']['value'],
-                    'type': 'array',
-                    'description': '定时任务列表'
-                }
+        # 直接从配置文件读取定时任务数据
+        tasks = []
+        try:
+            config_path = os.path.join(ROOT_DIR, 'src/config/config.json')
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+                if 'categories' in config_data and 'schedule_settings' in config_data['categories']:
+                    if 'settings' in config_data['categories']['schedule_settings'] and 'tasks' in config_data['categories']['schedule_settings']['settings']:
+                        tasks = config_data['categories']['schedule_settings']['settings']['tasks'].get('value', [])
+        except Exception as e:
+            logger.error(f"读取任务数据失败: {str(e)}")
+        
+        # 将定时任务配置添加到 config_groups 中
+        config_groups['定时任务配置'] = {
+            'tasks': {
+                'value': tasks,
+                'type': 'array',
+                'description': '定时任务列表'
             }
-        else:
-            config_groups['定时任务配置'] = {
-                'tasks': {
-                    'value': [],
-                    'type': 'array',
-                    'description': '定时任务列表'
-                }
-            }
-
-        # 打印调试信息
-        logger.debug(f"解析后的定时任务配置: {config_groups.get('定时任务配置', {}).get('tasks', {}).get('value', [])}")
+        }
+        
+        logger.debug(f"解析后的定时任务配置: {tasks}")
         
         return config_groups
         
@@ -552,27 +550,69 @@ def save_config():
         with open(config_path, 'r', encoding='utf-8') as f:
             current_config = json.load(f)
         
+        # 确保 categories 和 schedule_settings 存在
+        if 'categories' not in current_config:
+            current_config['categories'] = {}
+            
+        if 'schedule_settings' not in current_config['categories']:
+            current_config['categories']['schedule_settings'] = {
+                "title": "定时任务配置",
+                "settings": {
+                    "tasks": {
+                        "value": [],
+                        "type": "array",
+                        "description": "定时任务列表"
+                    }
+                }
+            }
+        elif 'settings' not in current_config['categories']['schedule_settings']:
+            current_config['categories']['schedule_settings']['settings'] = {
+                "tasks": {
+                    "value": [],
+                    "type": "array",
+                    "description": "定时任务列表"
+                }
+            }
+        elif 'tasks' not in current_config['categories']['schedule_settings']['settings']:
+            current_config['categories']['schedule_settings']['settings']['tasks'] = {
+                "value": [],
+                "type": "array",
+                "description": "定时任务列表"
+            }
+        
         # 更新配置
         for key, value in data.items():
-            if key in current_config:
-                current_config[key] = value
-            
             # 特殊处理定时任务配置
             if key == 'TASKS':
                 try:
-                    tasks = json.loads(value) if isinstance(value, str) else value
+                    tasks = value if isinstance(value, list) else (json.loads(value) if isinstance(value, str) else [])
+                    logger.debug(f"处理任务数据: {tasks}")
                     current_config['categories']['schedule_settings']['settings']['tasks']['value'] = tasks
                 except Exception as e:
                     logger.error(f"处理定时任务配置失败: {str(e)}")
+            # 处理其他配置项
+            elif key in ['LISTEN_LIST', 'DEEPSEEK_BASE_URL', 'MODEL', 'DEEPSEEK_API_KEY', 'MAX_TOKEN', 'TEMPERATURE',
+                        'MOONSHOT_API_KEY', 'MOONSHOT_BASE_URL', 'MOONSHOT_TEMPERATURE', 'MOONSHOT_MODEL',
+                        'IMAGE_MODEL', 'TEMP_IMAGE_DIR', 'AUTO_MESSAGE', 'MIN_COUNTDOWN_HOURS', 'MAX_COUNTDOWN_HOURS',
+                        'QUIET_TIME_START', 'QUIET_TIME_END', 'TTS_API_URL', 'VOICE_DIR', 'MAX_GROUPS', 'AVATAR_DIR']:
+                # 这里可以添加更多的配置项映射
+                update_config_value(current_config, key, value)
         
         # 保存配置
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(current_config, f, ensure_ascii=False, indent=4)
         
+        # 立即重新加载配置
+        g.config_data = current_config
+        
         # 重新初始化定时任务
         try:
-            from src.main import initialize_auto_tasks
-            initialize_auto_tasks()
+            from src.main import initialize_auto_tasks, message_handler
+            auto_tasker = initialize_auto_tasks(message_handler)
+            if auto_tasker:
+                logger.info("成功重新初始化定时任务")
+            else:
+                logger.warning("重新初始化定时任务返回空值")
         except Exception as e:
             logger.error(f"重新初始化定时任务失败: {str(e)}")
         
@@ -589,6 +629,53 @@ def save_config():
             "message": f"保存失败: {str(e)}",
             "title": "错误"
         })
+
+def update_config_value(config_data, key, value):
+    """更新配置值到正确的位置"""
+    try:
+        # 配置项映射表
+        mapping = {
+            'LISTEN_LIST': ['categories', 'user_settings', 'settings', 'listen_list', 'value'],
+            'DEEPSEEK_BASE_URL': ['categories', 'llm_settings', 'settings', 'base_url', 'value'],
+            'MODEL': ['categories', 'llm_settings', 'settings', 'model', 'value'],
+            'DEEPSEEK_API_KEY': ['categories', 'llm_settings', 'settings', 'api_key', 'value'],
+            'MAX_TOKEN': ['categories', 'llm_settings', 'settings', 'max_tokens', 'value'],
+            'TEMPERATURE': ['categories', 'llm_settings', 'settings', 'temperature', 'value'],
+            'MOONSHOT_API_KEY': ['categories', 'media_settings', 'settings', 'image_recognition', 'api_key', 'value'],
+            'MOONSHOT_BASE_URL': ['categories', 'media_settings', 'settings', 'image_recognition', 'base_url', 'value'],
+            'MOONSHOT_TEMPERATURE': ['categories', 'media_settings', 'settings', 'image_recognition', 'temperature', 'value'],
+            'MOONSHOT_MODEL': ['categories', 'media_settings', 'settings', 'image_recognition', 'model', 'value'],
+            'IMAGE_MODEL': ['categories', 'media_settings', 'settings', 'image_generation', 'model', 'value'],
+            'TEMP_IMAGE_DIR': ['categories', 'media_settings', 'settings', 'image_generation', 'temp_dir', 'value'],
+            'TTS_API_URL': ['categories', 'media_settings', 'settings', 'text_to_speech', 'tts_api_url', 'value'],
+            'VOICE_DIR': ['categories', 'media_settings', 'settings', 'text_to_speech', 'voice_dir', 'value'],
+            'AUTO_MESSAGE': ['categories', 'behavior_settings', 'settings', 'auto_message', 'content', 'value'],
+            'MIN_COUNTDOWN_HOURS': ['categories', 'behavior_settings', 'settings', 'auto_message', 'countdown', 'min_hours', 'value'],
+            'MAX_COUNTDOWN_HOURS': ['categories', 'behavior_settings', 'settings', 'auto_message', 'countdown', 'max_hours', 'value'],
+            'QUIET_TIME_START': ['categories', 'behavior_settings', 'settings', 'quiet_time', 'start', 'value'],
+            'QUIET_TIME_END': ['categories', 'behavior_settings', 'settings', 'quiet_time', 'end', 'value'],
+            'MAX_GROUPS': ['categories', 'behavior_settings', 'settings', 'context', 'max_groups', 'value'],
+            'AVATAR_DIR': ['categories', 'behavior_settings', 'settings', 'context', 'avatar_dir', 'value'],
+        }
+        
+        if key in mapping:
+            path = mapping[key]
+            current = config_data
+            
+            # 遍历路径直到倒数第二个元素
+            for part in path[:-1]:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+            
+            # 设置最终值
+            current[path[-1]] = value
+            logger.debug(f"已更新配置 {key}: {value}")
+        else:
+            logger.warning(f"未知的配置项: {key}")
+    
+    except Exception as e:
+        logger.error(f"更新配置值失败 {key}: {str(e)}")
 
 # 添加上传处理路由
 @app.route('/upload_background', methods=['POST'])
@@ -644,18 +731,24 @@ def get_background():
             "message": str(e)
         })
 
-# 添加新的路由
+@app.before_request
+def load_config():
+    """在每次请求之前加载配置"""
+    try:
+        config_path = os.path.join(ROOT_DIR, 'src/config/config.json')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            g.config_data = json.load(f)  # 使用 g 来存储配置数据
+    except Exception as e:
+        logger.error(f"加载配置失败: {str(e)}")
+
 @app.route('/dashboard')
 def dashboard():
     """仪表盘页面"""
     if not session.get('logged_in'):
         return redirect(url_for('login'))
     
-    # 读取配置
-    config_groups = {}
-    with open(os.path.join(ROOT_DIR, 'src/config/config.json'), 'r', encoding='utf-8') as f:
-        config_data = json.load(f)
-        config_groups = config_data.get('categories', {})
+    # 使用 g 中的配置数据
+    config_groups = g.config_data.get('categories', {})
     
     return render_template(
         'dashboard.html',
@@ -942,21 +1035,26 @@ def config():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
         
+    # 直接从配置文件读取任务数据
+    tasks = []
+    try:
+        config_path = os.path.join(ROOT_DIR, 'src/config/config.json')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+            if 'categories' in config_data and 'schedule_settings' in config_data['categories']:
+                if 'settings' in config_data['categories']['schedule_settings'] and 'tasks' in config_data['categories']['schedule_settings']['settings']:
+                    tasks = config_data['categories']['schedule_settings']['settings']['tasks'].get('value', [])
+    except Exception as e:
+        logger.error(f"读取任务数据失败: {str(e)}")
+    
     config_groups = parse_config_groups()  # 获取配置组
     
-    # 获取定时任务列表
-    tasks = config_groups.get('定时任务配置', {}).get('tasks', {}).get('value', [])
-    
-    # 打印详细的调试信息
-    logger.debug(f"配置组: {config_groups}")
-    logger.debug(f"定时任务配置: {config_groups.get('定时任务配置', {})}")
-    logger.debug(f"tasks 配置: {config_groups.get('定时任务配置', {}).get('tasks', {})}")
-    logger.debug(f"获取到的任务列表: {tasks}")
+    logger.debug(f"传递给前端的任务列表: {tasks}")
     
     return render_template(
         'config.html',
         config_groups=config_groups,  # 传递配置组
-        tasks_json=json.dumps(tasks, ensure_ascii=False),  # 额外传递任务列表JSON
+        tasks_json=json.dumps(tasks, ensure_ascii=False),  # 直接传递任务列表JSON
         is_local=is_local_network(),
         active_page='config'
     )
@@ -1337,9 +1435,13 @@ def check_dependencies():
                     [sys.executable, '-m', 'pip', 'list'],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    universal_newlines=True
                 )
                 stdout, stderr = process.communicate()
+                
+                # 解码字节数据为字符串
+                stdout = stdout.decode('utf-8')
+                stderr = stderr.decode('utf-8')
+                
                 # 解析pip list的输出，只获取包名
                 installed_packages = {
                     line.split()[0].lower() 
@@ -1602,9 +1704,13 @@ def install_dependencies():
             [sys.executable, '-m', 'pip', 'install', '-r', requirements_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            universal_newlines=True
         )
         stdout, stderr = process.communicate()
+        
+        # 解码字节数据为字符串
+        stdout = stdout.decode('utf-8')
+        stderr = stderr.decode('utf-8')
+        
         output.append(stdout if stdout else stderr)
         
         if process.returncode == 0:
@@ -1876,9 +1982,51 @@ def quick_setup():
 # 添加获取可用人设列表的路由
 @app.route('/get_available_avatars')
 def get_available_avatars_route():
-    """获取可用的人设列表"""
+    """获取可用的人设目录列表"""
     try:
-        avatars = get_available_avatars()
+        # 使用绝对路径
+        avatar_base_dir = os.path.join(ROOT_DIR, "data", "avatars")
+        
+        # 检查目录是否存在
+        if not os.path.exists(avatar_base_dir):
+            # 尝试创建目录
+            try:
+                os.makedirs(avatar_base_dir)
+                logger.info(f"已创建人设目录: {avatar_base_dir}")
+            except Exception as e:
+                logger.error(f"创建人设目录失败: {str(e)}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f"人设目录不存在且无法创建: {str(e)}"
+                })
+        
+        # 获取所有包含 avatar.md 和 emojis 目录的有效人设目录
+        avatars = []
+        for item in os.listdir(avatar_base_dir):
+            avatar_dir = os.path.join(avatar_base_dir, item)
+            if os.path.isdir(avatar_dir):
+                avatar_md_path = os.path.join(avatar_dir, "avatar.md")
+                emojis_dir = os.path.join(avatar_dir, "emojis")
+                
+                # 检查 avatar.md 文件
+                if not os.path.exists(avatar_md_path):
+                    logger.warning(f"人设 {item} 缺少 avatar.md 文件")
+                    continue
+                
+                # 检查 emojis 目录
+                if not os.path.exists(emojis_dir):
+                    logger.warning(f"人设 {item} 缺少 emojis 目录")
+                    try:
+                        os.makedirs(emojis_dir)
+                        logger.info(f"已为人设 {item} 创建 emojis 目录")
+                    except Exception as e:
+                        logger.error(f"为人设 {item} 创建 emojis 目录失败: {str(e)}")
+                        continue
+                
+                avatars.append(f"data/avatars/{item}")
+        
+        logger.info(f"找到 {len(avatars)} 个有效人设: {avatars}")
+        
         return jsonify({
             'status': 'success',
             'avatars': avatars
@@ -1943,6 +2091,156 @@ def load_avatar_content():
             'message': str(e)
         })
 
+@app.route('/get_tasks')
+def get_tasks():
+    """获取最新的任务数据"""
+    try:
+        # 直接从配置文件读取任务数据
+        tasks = []
+        config_path = os.path.join(ROOT_DIR, 'src/config/config.json')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+            if 'categories' in config_data and 'schedule_settings' in config_data['categories']:
+                if 'settings' in config_data['categories']['schedule_settings'] and 'tasks' in config_data['categories']['schedule_settings']['settings']:
+                    tasks = config_data['categories']['schedule_settings']['settings']['tasks'].get('value', [])
+        
+        logger.debug(f"获取到的任务数据: {tasks}")
+        
+        return jsonify({
+            'status': 'success',
+            'tasks': tasks
+        })
+    except Exception as e:
+        logger.error(f"获取任务数据失败: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
+
+@app.route('/get_all_configs')
+def get_all_configs():
+    """获取所有最新的配置数据"""
+    try:
+        # 直接从配置文件读取所有配置数据
+        config_path = os.path.join(ROOT_DIR, 'src/config/config.json')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+        
+        # 解析配置数据为前端需要的格式
+        configs = {}
+        tasks = []
+        
+        # 处理用户设置
+        if 'categories' in config_data:
+            # 用户设置
+            if 'user_settings' in config_data['categories'] and 'settings' in config_data['categories']['user_settings']:
+                configs['基础配置'] = {}
+                if 'listen_list' in config_data['categories']['user_settings']['settings']:
+                    configs['基础配置']['LISTEN_LIST'] = {
+                        'value': config_data['categories']['user_settings']['settings']['listen_list'].get('value', [])
+                    }
+            
+            # LLM设置
+            if 'llm_settings' in config_data['categories'] and 'settings' in config_data['categories']['llm_settings']:
+                llm_settings = config_data['categories']['llm_settings']['settings']
+                if 'api_key' in llm_settings:
+                    configs['基础配置']['DEEPSEEK_API_KEY'] = {'value': llm_settings['api_key'].get('value', '')}
+                if 'base_url' in llm_settings:
+                    configs['基础配置']['DEEPSEEK_BASE_URL'] = {'value': llm_settings['base_url'].get('value', '')}
+                if 'model' in llm_settings:
+                    configs['基础配置']['MODEL'] = {'value': llm_settings['model'].get('value', '')}
+                if 'max_tokens' in llm_settings:
+                    configs['基础配置']['MAX_TOKEN'] = {'value': llm_settings['max_tokens'].get('value', 2000)}
+                if 'temperature' in llm_settings:
+                    configs['基础配置']['TEMPERATURE'] = {'value': llm_settings['temperature'].get('value', 1.1)}
+            
+            # 媒体设置
+            if 'media_settings' in config_data['categories'] and 'settings' in config_data['categories']['media_settings']:
+                media_settings = config_data['categories']['media_settings']['settings']
+                
+                # 图像识别设置
+                configs['图像识别API配置'] = {}
+                if 'image_recognition' in media_settings:
+                    img_recog = media_settings['image_recognition']
+                    if 'api_key' in img_recog:
+                        configs['图像识别API配置']['MOONSHOT_API_KEY'] = {'value': img_recog['api_key'].get('value', '')}
+                    if 'base_url' in img_recog:
+                        configs['图像识别API配置']['MOONSHOT_BASE_URL'] = {'value': img_recog['base_url'].get('value', '')}
+                    if 'temperature' in img_recog:
+                        configs['图像识别API配置']['MOONSHOT_TEMPERATURE'] = {'value': img_recog['temperature'].get('value', 0.7)}
+                    if 'model' in img_recog:
+                        configs['图像识别API配置']['MOONSHOT_MODEL'] = {'value': img_recog['model'].get('value', '')}
+                
+                # 图像生成设置
+                configs['图像生成配置'] = {}
+                if 'image_generation' in media_settings:
+                    img_gen = media_settings['image_generation']
+                    if 'model' in img_gen:
+                        configs['图像生成配置']['IMAGE_MODEL'] = {'value': img_gen['model'].get('value', '')}
+                    if 'temp_dir' in img_gen:
+                        configs['图像生成配置']['TEMP_IMAGE_DIR'] = {'value': img_gen['temp_dir'].get('value', '')}
+                
+                # 语音设置
+                configs['语音配置'] = {}
+                if 'text_to_speech' in media_settings:
+                    tts = media_settings['text_to_speech']
+                    if 'tts_api_url' in tts:
+                        configs['语音配置']['TTS_API_URL'] = {'value': tts['tts_api_url'].get('value', '')}
+                    if 'voice_dir' in tts:
+                        configs['语音配置']['VOICE_DIR'] = {'value': tts['voice_dir'].get('value', '')}
+            
+            # 行为设置
+            if 'behavior_settings' in config_data['categories'] and 'settings' in config_data['categories']['behavior_settings']:
+                behavior = config_data['categories']['behavior_settings']['settings']
+                
+                # 时间配置
+                configs['时间配置'] = {}
+                if 'auto_message' in behavior:
+                    auto_msg = behavior['auto_message']
+                    if 'content' in auto_msg:
+                        configs['时间配置']['AUTO_MESSAGE'] = {'value': auto_msg['content'].get('value', '')}
+                    if 'countdown' in auto_msg:
+                        if 'min_hours' in auto_msg['countdown']:
+                            configs['时间配置']['MIN_COUNTDOWN_HOURS'] = {'value': auto_msg['countdown']['min_hours'].get('value', 1)}
+                        if 'max_hours' in auto_msg['countdown']:
+                            configs['时间配置']['MAX_COUNTDOWN_HOURS'] = {'value': auto_msg['countdown']['max_hours'].get('value', 3)}
+                
+                if 'quiet_time' in behavior:
+                    quiet = behavior['quiet_time']
+                    if 'start' in quiet:
+                        configs['时间配置']['QUIET_TIME_START'] = {'value': quiet['start'].get('value', '')}
+                    if 'end' in quiet:
+                        configs['时间配置']['QUIET_TIME_END'] = {'value': quiet['end'].get('value', '')}
+                
+                # Prompt配置
+                configs['Prompt配置'] = {}
+                if 'context' in behavior:
+                    context = behavior['context']
+                    if 'max_groups' in context:
+                        configs['Prompt配置']['MAX_GROUPS'] = {'value': context['max_groups'].get('value', 15)}
+                    if 'avatar_dir' in context:
+                        configs['Prompt配置']['AVATAR_DIR'] = {'value': context['avatar_dir'].get('value', '')}
+            
+            # 定时任务
+            if 'schedule_settings' in config_data['categories'] and 'settings' in config_data['categories']['schedule_settings']:
+                if 'tasks' in config_data['categories']['schedule_settings']['settings']:
+                    tasks = config_data['categories']['schedule_settings']['settings']['tasks'].get('value', [])
+        
+        logger.debug(f"获取到的所有配置数据: {configs}")
+        logger.debug(f"获取到的任务数据: {tasks}")
+        
+        return jsonify({
+            'status': 'success',
+            'configs': configs,
+            'tasks': tasks
+        })
+    except Exception as e:
+        logger.error(f"获取所有配置数据失败: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
+
 if __name__ == '__main__':
     try:
         main()
@@ -1955,3 +2253,4 @@ if __name__ == '__main__':
     except Exception as e:
         print_status(f"系统错误: {str(e)}", "error", "ERROR")
         cleanup_processes()
+

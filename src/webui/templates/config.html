@@ -570,7 +570,7 @@
                     <h5 class="modal-title">
                         <i class="bi bi-list-check me-2"></i>定时任务列表
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
                 </div>
                 <div class="modal-body">
                     <div id="taskListContainer" class="list-group">
@@ -686,8 +686,35 @@
             return new bootstrap.Tooltip(tooltipTriggerEl)
         })
 
-        // 等待 DOM 加载完成
+        // 页面加载时初始化所有配置数据
         document.addEventListener('DOMContentLoaded', function() {
+            // 获取最新的配置数据
+            fetch('/get_all_configs')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // 更新所有配置项
+                        updateAllConfigs(data.configs);
+                        
+                        // 更新任务列表
+                        const tasksInput = document.getElementById('TASKS');
+                        if (tasksInput && data.tasks) {
+                            tasksInput.value = JSON.stringify(data.tasks);
+                            updateTaskList();
+                        }
+                    } else {
+                        console.error('获取配置数据失败:', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('获取配置数据请求失败:', error);
+                    // 如果请求失败，使用页面加载时的初始数据
+                    const tasksInput = document.getElementById('TASKS');
+                    if (tasksInput) {
+                        updateTaskList();
+                    }
+                });
+            
             // 获取保存按钮
             const saveButton = document.getElementById('saveButton');
             
@@ -700,14 +727,8 @@
                 // 获取所有表单数据
                 const formData = new FormData(mainForm);
                 
-                // 调试输出所有表单数据
+                // 处理表单数据
                 for (let [key, value] of formData.entries()) {
-                    console.log(`Form data - ${key}: ${value}`);
-                    // 特别处理温度参数
-                    if (key === 'TEMPERATURE') {
-                        value = parseFloat(value);
-                        console.log(`处理后的温度值: ${value}`);
-                    }
                     processFormValue(config, key, value);
                 }
                 
@@ -718,13 +739,29 @@
                     }
                 }
 
+                // 特别处理任务数据 - 确保直接从隐藏字段获取
+                const tasksInput = document.getElementById('TASKS');
+                if (tasksInput) {
+                    try {
+                        const tasksValue = tasksInput.value;
+                        if (tasksValue) {
+                            // 解析为JSON对象并添加到配置中
+                            config['TASKS'] = JSON.parse(tasksValue);
+                        }
+                    } catch (e) {
+                        // 出错时使用空数组
+                        config['TASKS'] = [];
+                    }
+                }
+
                 // 特别检查温度值
                 const temperatureSlider = document.getElementById('TEMPERATURE_slider');
                 const temperatureInput = document.getElementById('TEMPERATURE');
                 if (temperatureSlider && temperatureInput) {
                     const tempValue = parseFloat(temperatureSlider.value);
-                    config['TEMPERATURE'] = tempValue;
-                    console.log(`Final temperature value from slider: ${tempValue}`);
+                    if (!isNaN(tempValue)) {
+                        config['TEMPERATURE'] = tempValue;
+                    }
                 }
 
                 // 检查页面上是否有用户列表元素
@@ -742,8 +779,6 @@
                         confirmDialog.hide();
                         saveConfig(config);
                     };
-                    
-                    // 取消按钮事件在HTML中已设置为关闭对话框
                 } else {
                     // 直接保存配置
                     saveConfig(config);
@@ -759,10 +794,62 @@
                     }
                 })
                 .catch(error => console.error('Error:', error));
-
-            // 页面加载时初始化任务列表
-            updateTaskList();
         });
+
+        // 更新所有配置项的函数
+        function updateAllConfigs(configs) {
+            // 遍历所有配置组和配置项
+            for (const groupKey in configs) {
+                const group = configs[groupKey];
+                for (const configKey in group) {
+                    const config = group[configKey];
+                    const element = document.getElementById(configKey);
+                    if (element) {
+                        // 根据元素类型设置值
+                        if (element.type === 'checkbox') {
+                            element.checked = config.value;
+                        } else if (element.tagName === 'SELECT') {
+                            element.value = config.value;
+                        } else {
+                            element.value = config.value;
+                        }
+                        
+                        // 特殊处理滑块
+                        const slider = document.getElementById(`${configKey}_slider`);
+                        if (slider) {
+                            slider.value = config.value;
+                            const display = document.getElementById(`${configKey}_display`);
+                            if (display) {
+                                display.textContent = typeof config.value === 'number' ? 
+                                    (configKey === 'TEMPERATURE' ? config.value.toFixed(1) : config.value) : 
+                                    config.value;
+                            }
+                        }
+                        
+                        // 特殊处理用户列表
+                        if (configKey === 'LISTEN_LIST' && Array.isArray(config.value)) {
+                            const userListElement = document.getElementById(`selected_users_${configKey}`);
+                            if (userListElement) {
+                                userListElement.innerHTML = '';
+                                config.value.forEach(user => {
+                                    if (user) {
+                                        const userDiv = document.createElement('div');
+                                        userDiv.className = 'list-group-item d-flex justify-content-between align-items-center';
+                                        userDiv.innerHTML = `
+                                            ${user}
+                                            <button type="button" class="btn btn-danger btn-sm" onclick="removeUser('${configKey}', '${user}')">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        `;
+                                        userListElement.appendChild(userDiv);
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // 保存配置的函数
         function saveConfig(config) {
@@ -788,16 +875,20 @@
         }
 
         function processFormValue(config, key, value) {
-            // 添加调试日志
-            console.log(`Processing ${key}: ${value} (type: ${typeof value})`);
-            
             if (key === 'LISTEN_LIST') {
-                config[key] = value.split(',').map(item => item.trim());
+                config[key] = value.split(',').map(item => item.trim()).filter(item => item);
             } else if (key === 'TEMPERATURE') {
                 // 特殊处理温度参数
                 const tempValue = parseFloat(value);
-                config[key] = tempValue;
-                console.log(`Processed temperature to: ${config[key]} (type: ${typeof config[key]})`);
+                if (!isNaN(tempValue)) {
+                    config[key] = tempValue;
+                }
+            } else if (key === 'TASKS') {
+                try {
+                    config[key] = JSON.parse(value);
+                } catch (e) {
+                    config[key] = [];
+                }
             } else if (value.toLowerCase() === 'true' || value.toLowerCase() === 'false') {
                 config[key] = value.toLowerCase() === 'true';
             } else if (!isNaN(value) && value !== '') {
@@ -1030,7 +1121,7 @@
                     showSaveNotification('请输入有效的间隔时间', 'error');
                     return;
                 }
-                task.interval = hours * 3600; // 转换为秒
+                task.schedule_time = (hours * 3600).toString(); // 转换为秒并存储为字符串
             }
             
             // 获取现有的任务列表
@@ -1054,6 +1145,7 @@
             
             // 更新隐藏输入框的值
             document.getElementById('TASKS').value = JSON.stringify(tasks);
+            console.log('更新后的任务数据:', document.getElementById('TASKS').value);
             
             // 关闭模态框
             const modal = bootstrap.Modal.getInstance(document.getElementById('addTaskModal'));
@@ -1096,7 +1188,7 @@
                                 <span class="badge bg-primary me-2">${task.task_id}</span>
                                 <small class="text-muted">${task.schedule_type === 'cron' ? 
                                     `Cron: ${task.schedule_time}` : 
-                                    `每 ${task.interval/3600} 小时`}</small>
+                                    `每 ${task.schedule_time.split(':')[0]}:${task.schedule_time.split(':')[1]}`}</small>
                             </div>
                             <div class="mb-1">发送给：${task.chat_id}</div>
                             <small class="text-muted">${task.content}</small>
@@ -1109,26 +1201,6 @@
             `).join('');
         }
 
-        // 页面加载时初始化任务列表
-        document.addEventListener('DOMContentLoaded', function() {
-            // 从隐藏输入框获取任务列表
-            const tasksInput = document.getElementById('TASKS');
-            if (tasksInput) {
-                try {
-                    // 确保有初始值
-                    if (!tasksInput.value) {
-                        // 如果没有值，尝试从 tasks_json 获取
-                        const tasks = {{ tasks_json|safe }};
-                        tasksInput.value = JSON.stringify(tasks);
-                    }
-                    // 更新显示
-                    updateTaskList();
-                } catch (e) {
-                    console.error('初始化任务列表失败:', e);
-                }
-            }
-        });
-
         function deleteTask(taskId) {
             if (confirm('确定要删除这个任务吗？')) {
                 // 获取当前任务列表
@@ -1139,7 +1211,6 @@
                         tasks = JSON.parse(tasksInput.value);
                     }
                 } catch (e) {
-                    console.error('解析任务列表失败:', e);
                     return;
                 }
                 
